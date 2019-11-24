@@ -5,11 +5,11 @@ Usage: dyn_gandi [--help] [--verbose] [--dry-run] [--conf=<c>] [--log=<l>] [--ou
 Options:
   -c --conf=<c>         Configuration file. [default: config.ini].
   -d --debug            Debug mode.
-  --dry-run             Display informations quits without modifications.
-  -h --help             Displays the help.
+  --dry-run             Display information and quit without modifications.
+  -h --help             Display this help and exit.
   -l --log=<l>          Log file. [default: ip.log]
   -o --out=<o>          IP output file. [default: ip.txt]
-  -v --verbose          Displays more informations.
+  -v --verbose          Display more information.
 
 """
 import configparser
@@ -87,7 +87,7 @@ def livedns_handle(domain, ip, records):
     # get DNS IP
     r_record = ldns.get_domain_record(domain, record_name=records[0]['name'], record_type=records[0]['type'])
     if not r_record or not r_record.get('values', []):
-        raise RuntimeWarning("Main record not found to check DNS IP." % domain)
+        raise RuntimeWarning("Main record not found to check DNS IP for domain %s." % domain)
 
     dns_ip = r_record['values'][0]
     message = "Local IP: %s, DNS IP: %s" % (ip, dns_ip)
@@ -127,16 +127,21 @@ def livedns_handle(domain, ip, records):
     for rec in records:
         try:
             r_update = ldns.put_domain_record(domain=domain, record_name=rec['name'], record_type=rec['type'], value=ip, ttl=int(config['dns']['ttl']))
-            if r_update is None:
-                message = "%s, Error when updating: %s/%s. Backup snapshot uuid: %s." % (message, rec['name'], rec['type'], snapshot_uuid)
-                return "ERROR", message
-
-            if verbose:
-                print("Updated record %s/%s from %s to %s" % (rec['name'], rec['type'], dns_ip, ip))
-                print("API response: %s" % json.dumps(r_update, indent=2))
         except Exception as e:
-            print("%s, Error: %s. Backup snapshot uuid: %s." % (message, repr(e), snapshot_uuid))
+            print(
+                "%s, Error: %s. Backup snapshot uuid: %s."
+                % (message, repr(e), snapshot_uuid),
+                file=sys.stderr,
+            )
             raise e
+
+        if r_update is None:
+            message = "%s, Error when updating: %s/%s. Backup snapshot uuid: %s." % (message, rec['name'], rec['type'], snapshot_uuid)
+            return "ERROR", message
+
+        if verbose:
+            print("Updated record %s/%s from %s to %s" % (rec['name'], rec['type'], dns_ip, ip))
+            print("API response: %s" % json.dumps(r_update, indent=2))
 
     # delete snapshot
     ldns.delete_domain_snapshot(domain, uuid=snapshot_uuid)
@@ -159,7 +164,7 @@ def main():
         ip_resolver = IpResolver(url=config['ip']['resolver_url'], alt_url=config['ip'].get('resolver_url_alt', None))
         ip = ip_resolver.resolve_ip()
     except IpResolverError as e:
-        print("%s - %s [ERROR]" % (today, str(e)))
+        print("%s - %s [ERROR]" % (today, str(e)), file=sys.stderr)
         raise RuntimeWarning("IP resolver returned an error: %s" % str(e))
 
     if verbose:
@@ -183,10 +188,13 @@ def main():
     # Query LiveDNS API
     domain = config['dns']['domain']  # type: str
 
+    # Sub-domain check
+    domain = domain.replace(".co.uk", ".co_uk")
     if re.match(r"^.+\.[^.]+\.[^.]+$", domain):
         if verbose:
             print("Warning: removing sub-domain part of %s" % domain)
         domain = re.sub(r"^.+\.([^.]+\.[^.]+)$", r"\g<1>", domain)
+    domain = domain.replace(".co_uk", ".co.uk")
 
     if verbose:
         print("Domain: %s" % domain)
@@ -209,7 +217,7 @@ def main():
 
     # output log
     if verbose:
-        print("")
+        print()
 
     to_log(message, action, datetime_label=today, dump=True)
 
