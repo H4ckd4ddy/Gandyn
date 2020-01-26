@@ -1,13 +1,13 @@
 [api]
 url = https://dns.api.gandi.net/api/v5
 ; Generate your Gandi API key via : https://account.gandi.net/en/users/<user>/security
-key = 
+key = {{GANDI_API_KEY}}
 
 [dns]
-domain = 
+domain = {{DOMAIN}}
 ; comma-separated records list
-records = @
-ttl = 300
+records = {{RECORD}}
+ttl = {{TTL}}
 
 [ip]
 ; Choose an IP resolver : either plain text, or web page containing a single IP
